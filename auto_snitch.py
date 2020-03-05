@@ -61,6 +61,7 @@ if __name__ == '__main__':
     r = requests.get(url=node + "/init", headers=headers)
 
     data = r.json()
+
     destination_room = sys.argv[1]
     action = None
 
@@ -264,7 +265,7 @@ if __name__ == '__main__':
             time.sleep(status_data.get('cooldown'))
             print(status_data)
             if "sugar_rush" not in status_data:
-                if status_data.get("gold") >= 25000:
+                if status_data.get("gold") >= 20000:
                     # I'll take you to the donut shop
                     move_to_room(15, data)
                     # buy donut
@@ -326,5 +327,32 @@ if __name__ == '__main__':
                 print("Missed the snitch, bitch.")
                 print("")
                 missed_snitch = True
+
+    elif action == "trans":
+        time.sleep(data.get('cooldown'))
+        if data.get("room_id") != 495:
+            move_to_room(495, data)
+        count = 0
+        while count < 10:
+            r = requests.post(url=node + "/status", headers=headers)
+            status_data = r.json()
+            print("status_data", status_data)
+            time.sleep(status_data.get('cooldown'))
+
+            if len(status_data.get("inventory")) > 0:
+                item = status_data.get("inventory")[0]
+                print(item)
+                if item != "well-crafted boots" or item != "exquisite boots" or item != "exquisite jacket":
+                    t = requests.post(url=node + "/transmogrify",
+                                      json={"name": item}, headers=headers)
+                    trans_data = t.json()
+                    print("MESSAGE: ", trans_data)
+                    time.sleep(trans_data.get('cooldown'))
+                    print(trans_data)
+                else:
+                    print("You've got something exquisite")
+                    sys.exit(1)
+
+            count += 1
 
     sys.exit(0)
