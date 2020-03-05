@@ -7,7 +7,7 @@ import time
 import os
 from scratch import excluded_rooms
 
-current_world = "underworld"
+current_world = "overworld"
 if current_world == "underworld":
     map_graph = underworld_graph
 else:
@@ -67,6 +67,22 @@ if __name__ == '__main__':
     if len(sys.argv) > 2:
         action = sys.argv[2]
 
+    def examine():
+        # Examine the well for the snitch room #
+        r = requests.post(url=node + "/examine",
+                          json={"name": "well"}, headers=headers)
+        well_data = r.json()
+        ls8_instructions = well_data.get('description')
+        time.sleep(well_data.get('cooldown'))
+
+        # Send it to the LS8 to be decoded
+        r = requests.post("https://afternoon-springs-84709.herokuapp.com/ls8",
+                          json={"description": ls8_instructions})
+
+        ls8_data = r.json()
+        # print("ls_8 data: ", ls8_data)
+        return ls8_data
+
     def collect_treasure(data):
         opposites = {'n': 's', 's': 'n', 'e': 'w', 'w': 'e'}
         path = []
@@ -77,9 +93,9 @@ if __name__ == '__main__':
             exits = data.get('exits')
             room_id = data.get('room_id')
             room_name = data.get('title')
+            print("")
             print('Room ID: ', room_id)
             print('Room Name: ', room_name)
-            print("path ", path)
             if len(data.get('items')) > 0:
                 time.sleep(data.get('cooldown'))
                 r = requests.get(url=node + "/init", headers=headers)
@@ -102,8 +118,8 @@ if __name__ == '__main__':
                     recall()
                     last_room = items_data.get('room_id')
                     path = []
-                    # graph = init_graph()
                     graph = excluded_rooms
+
                     r = requests.post(url=node + "/fly", json={
                         "direction": "w", "next_room_id": "1"}, headers=headers)
                     shop_data = r.json()
@@ -114,7 +130,7 @@ if __name__ == '__main__':
                         r = requests.post(
                             url=node + "/sell", json={"name": item, "confirm": "yes"}, headers=headers)
                         sell_data = r.json()
-                        print('just sold ', item)
+                        print(f'{item} SOLD!')
                         time.sleep(sell_data.get('cooldown'))
 
             if room_id not in graph:
@@ -132,11 +148,12 @@ if __name__ == '__main__':
                 if len(path) == 0:
                     print('Final graph')
                     print(graph)
-                    break
+                    graph = excluded_rooms
+                    # continue
                 wayBack = opposites[path.pop()]
                 r = requests.post(url=node + "/fly", json={
                     "direction": wayBack, "next_room_id": str(graph[room_id][wayBack])}, headers=headers)
-                print(r.json())
+                # print(r.json())
                 data = r.json()
                 print("Used Wise Explorer")
                 last_room = None
@@ -147,7 +164,7 @@ if __name__ == '__main__':
                 r = requests.post(url=node + "/fly",
                                   json={"direction": wayForward, "next_room_id": str(graph_of_map[room_id][wayForward])}, headers=headers)
                 data = r.json()
-                print(data.get('cooldown'))
+                print("Cooldown: ", data.get('cooldown'))
 
     def dash(direction_list, current_room):
         room_id = current_room
@@ -166,7 +183,7 @@ if __name__ == '__main__':
             for room in next_room_ids[1:]:
                 res += f",{room}"
             # print(direction_list, i)
-            if count > 2:
+            if count > 4:
                 print("Dash dash do yo thing")
                 r = requests.post(url=node + "/dash", json={
                     "direction": direction_list[i], "next_room_ids": res, "num_rooms": str(count)}, headers=headers)
@@ -235,6 +252,7 @@ if __name__ == '__main__':
             time.sleep(20)
 
     elif action == "snitch":
+        missed_snitch = False
         while True:
             time.sleep(data.get('cooldown'))
             data = recall()
@@ -246,7 +264,7 @@ if __name__ == '__main__':
             time.sleep(status_data.get('cooldown'))
             print(status_data)
             if "sugar_rush" not in status_data:
-                if status_data.get("gold") >= 6000:
+                if status_data.get("gold") >= 25000:
                     # I'll take you to the donut shop
                     move_to_room(15, data)
                     # buy donut
@@ -259,26 +277,37 @@ if __name__ == '__main__':
                     # GO GET TREASURE
                     collect_treasure(data)
 
+            # move to overworld well
+            r = requests.get(url=node + "/init", headers=headers)
+            data = r.json()
+            time.sleep(data.get('cooldown'))
+            move_to_room(55, data)
+
             # LET'S DO THE TIME WARP
             r = requests.post(url=node + "/warp", headers=headers)
             map_graph = underworld_graph
             warp_data = r.json()
             time.sleep(warp_data.get('cooldown'))
-            move_to_room(555, warp_data)
-            r = requests.post(url=node + "/examine",
-                              json={"name": "well"}, headers=headers)
-            well_data = r.json()
-            ls8_instructions = well_data.get('description')
-            time.sleep(well_data.get('cooldown'))
+            # move_to_room(555, warp_data)
 
-            r = requests.post("https://afternoon-springs-84709.herokuapp.com/ls8",
-                              json={"description": ls8_instructions})
+            # ls8_data = r.json()
+            if missed_snitch is True:
+                # if True:
+                ls8_data = examine()
+                snitch_room = ls8_data.get("room")
+                # print("here", ls8_data)
+                while ls8_data.get("room") == snitch_room:
+                    # print(snitch_room, ls8_data.get("room"))
+                    ls8_data = examine()
+            else:
+                ls8_data = examine()
 
-            ls8_data = r.json()
             r = requests.get(url=node + "/init", headers=headers)
             data = r.json()
             time.sleep(data.get('cooldown'))
-            print(f"Moving to room {ls8_data.get('room')} to mine. ⛏")
+
+            print(
+                f"Moving to room {ls8_data.get('room')} to find the golden snitch. ⛏")
             move_to_room(ls8_data.get('room'), data)
             r = requests.get(url=node + "/init", headers=headers)
             data = r.json()
@@ -291,5 +320,11 @@ if __name__ == '__main__':
                 print("")
                 print("Mine, snitch.")
                 print("")
+                missed_snitch = False
+            else:
+                print("")
+                print("Missed the snitch, bitch.")
+                print("")
+                missed_snitch = True
 
     sys.exit(0)
