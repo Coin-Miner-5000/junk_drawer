@@ -5,13 +5,16 @@ import requests
 import sys
 import time
 import os
-from scratch import excluded_rooms
+# from scratch import excluded_rooms
+excluded_rooms = {}
 
-current_world = "overworld"
+current_world = "underworld"
 if current_world == "underworld":
     map_graph = underworld_graph
 else:
     map_graph = graph_of_map
+
+MIN_GOLD_BALANCE = 10000
 
 
 def BFS(current_room, destination_room):
@@ -57,7 +60,7 @@ if __name__ == '__main__':
     node = "https://lambda-treasure-hunt.herokuapp.com/api/adv"
     KEY = os.environ.get("API_KEY")
     headers = {'Content-Type': 'application/json',
-               'Authorization': f"Token token"}
+               'Authorization': f"Token 50f83144a74d87d4dbe9230f7714c1ceb54d55b0"}
     r = requests.get(url=node + "/init", headers=headers)
 
     data = r.json()
@@ -89,8 +92,46 @@ if __name__ == '__main__':
         path = []
         graph = excluded_rooms
         last_room = None
-        while True:
+        current_gold = 0
+
+        while current_gold < MIN_GOLD_BALANCE:
             time.sleep(data.get('cooldown'))
+            # if data.get('room_id') != 0:
+            #     recall()
+
+            s = requests.post(url=node + "/status", headers=headers)
+            status_data = s.json()
+            time.sleep(status_data.get('cooldown'))
+            print(f"status: {status_data}")
+
+            # if "sugar_rush" not in status_data:
+            #     if status_data.get("gold") >= 2000:
+            #         print("YOOOOOO")
+            #         # I'll take you to the donut shop
+
+            #         move_to_room(15, data)
+            #         print('buy donut')
+            #         # buy donut
+            #         r = requests.post(url=node + "/buy",
+            #                           json={"name": "donut", "confirm": "yes"}, headers=headers)
+            #         hurtz_donut = r.json()
+            #         print("donuts ", hurtz_donut)
+            #         time.sleep(hurtz_donut.get('cooldown'))
+
+            # r = requests.post(url=node + "/warp", headers=headers)
+            # time.sleep(r.json().get('cooldown'))
+
+            # r = requests.post(url=node + "/fly",
+            #                   json={"direction": "w"}, headers=headers)
+            # time.sleep(r.json().get('cooldown'))
+
+            # r = requests.post(url=node + "/fly",
+            #                   json={"direction": "n"}, headers=headers)
+            # time.sleep(r.json().get('cooldown'))
+
+            # r = requests.post(url=node + "/warp", headers=headers)
+            # time.sleep(r.json().get('cooldown'))
+
             exits = data.get('exits')
             room_id = data.get('room_id')
             room_name = data.get('title')
@@ -128,11 +169,12 @@ if __name__ == '__main__':
                     time.sleep(shop_data.get('cooldown'))
                     inventory = status_data.get('inventory')
                     for item in inventory:
-                        r = requests.post(
-                            url=node + "/sell", json={"name": item, "confirm": "yes"}, headers=headers)
-                        sell_data = r.json()
-                        print(f'{item} SOLD!')
-                        time.sleep(sell_data.get('cooldown'))
+                        if item != "exquisite boots" or item != "exquisite jacket":
+                            r = requests.post(
+                                url=node + "/sell", json={"name": item, "confirm": "yes"}, headers=headers)
+                            sell_data = r.json()
+                            print(f'{item} SOLD!')
+                            time.sleep(sell_data.get('cooldown'))
 
             if room_id not in graph:
                 graph[room_id] = {"title": data.get('title'), "description": data.get('description'), "terrain": data.get(
@@ -144,20 +186,25 @@ if __name__ == '__main__':
                 graph[room_id][opposites[path[-1]]] = last_room
             unexploredExits = [
                 dir for dir in exits if graph[room_id][dir] == "?"]
+
             print('unexplored exits', unexploredExits)
             if not len(unexploredExits):
                 if len(path) == 0:
-                    print('Final graph')
-                    print(graph)
+                    print("Graph room id ", graph[room_id])
+                    print('Final graph length ', len(graph))
                     graph = excluded_rooms
-                    # continue
-                wayBack = opposites[path.pop()]
-                r = requests.post(url=node + "/fly", json={
-                    "direction": wayBack, "next_room_id": str(graph[room_id][wayBack])}, headers=headers)
-                # print(r.json())
-                data = r.json()
-                print("Used Wise Explorer")
-                last_room = None
+                    graph[room_id] = {"title": data.get('title'), "description": data.get('description'), "terrain": data.get(
+                        'terrain'), "coordinates": data.get('coordinates'), "elevation": data.get('elevation')}
+                    for dir in exits:
+                        graph[room_id][dir] = "?"
+                else:
+                    wayBack = opposites[path.pop()]
+                    r = requests.post(url=node + "/fly", json={
+                        "direction": wayBack, "next_room_id": str(graph[room_id][wayBack])}, headers=headers)
+                    # print(r.json())
+                    data = r.json()
+                    print("Used Wise Explorer")
+                    last_room = None
             else:
                 wayForward = unexploredExits[0]
                 path.append(wayForward)
@@ -166,6 +213,11 @@ if __name__ == '__main__':
                                   json={"direction": wayForward, "next_room_id": str(graph_of_map[room_id][wayForward])}, headers=headers)
                 data = r.json()
                 print("Cooldown: ", data.get('cooldown'))
+
+        r = requests.post(url=node + "/status", headers=headers)
+        data = r.json()
+        current_gold = data.get('gold')
+        time.sleep(data.get('cooldown'))
 
     def dash(direction_list, current_room):
         room_id = current_room
@@ -184,7 +236,7 @@ if __name__ == '__main__':
             for room in next_room_ids[1:]:
                 res += f",{room}"
             # print(direction_list, i)
-            if count > 4:
+            if count > 12:
                 print("Dash dash do yo thing")
                 r = requests.post(url=node + "/dash", json={
                     "direction": direction_list[i], "next_room_ids": res, "num_rooms": str(count)}, headers=headers)
@@ -253,7 +305,7 @@ if __name__ == '__main__':
             time.sleep(20)
 
     elif action == "snitch":
-        missed_snitch = False
+        missed_snitch = True
         while True:
             time.sleep(data.get('cooldown'))
             data = recall()
@@ -265,7 +317,7 @@ if __name__ == '__main__':
             time.sleep(status_data.get('cooldown'))
             print(status_data)
             if "sugar_rush" not in status_data:
-                if status_data.get("gold") >= 20000:
+                if status_data.get("gold") > 20000:
                     # I'll take you to the donut shop
                     move_to_room(15, data)
                     # buy donut
@@ -308,7 +360,7 @@ if __name__ == '__main__':
             time.sleep(data.get('cooldown'))
 
             print(
-                f"Moving to room {ls8_data.get('room')} to find the golden snitch. ⛏")
+                f"Flying to room {ls8_data.get('room')} to find the golden snitch. ⛏")
             move_to_room(ls8_data.get('room'), data)
             r = requests.get(url=node + "/init", headers=headers)
             data = r.json()
@@ -319,12 +371,13 @@ if __name__ == '__main__':
                 data = r.json()
                 time.sleep(data.get('cooldown'))
                 print("")
-                print("Mine, snitch.")
+                print("You found the golden snitch! Did you grab it fast enough?")
+                print("snitch data", data)
                 print("")
                 missed_snitch = False
             else:
                 print("")
-                print("Missed the snitch, bitch.")
+                print("Missed the snitch. Son of a...")
                 print("")
                 missed_snitch = True
 
